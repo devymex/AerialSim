@@ -39,6 +39,23 @@ float String2Float(const char *&pStr)
 	return fVal;
 }
 
+std::string Int2Str(int n)
+{
+	char szNum[20];
+
+#pragma warning (push)
+#pragma warning (disable: 4996)
+	itoa(n, szNum, 10);
+#pragma warning (pop)
+
+	std::string result(szNum);
+	for (; result.size() < 5; )
+	{
+		result.insert(result.begin(), '0');
+	}
+	return result;
+}
+
 std::string W2A(LPCWSTR pStrIn)
 {
 	int nSize = WideCharToMultiByte(936, 0, pStrIn, -1, NULL, 0, NULL, NULL);
@@ -131,10 +148,13 @@ void GenerateNormals(const VEC_POINT3F &triNorms,
 		{
 			int nLD = ((r - 1) * (demInfo.nCols - 1) + c - 1) * 2;
 			int nLU = nLD + (demInfo.nCols - 1) * 2;
+			int triIdx[6] = {
+				nLD + 0, nLD + 1, nLD + 2,
+				nLU + 1, nLU + 2, nLU + 3
+			};
+			float fWeiSum = 0.0f;
 
-			int triIdx[6] = {nLD, nLD + 1, nLD + 2, nLU + 1, nLU + 2, nLU + 3};
 			cv::Point3f &avgNorm = normal.at(r * demInfo.nCols + c);
-			float fDiv = 0.0f;
 			for (int j = 0; j < 6; ++j)
 			{
 				if (triIdx[j] >= 0 && triIdx[j] < (int)triNorms.size())
@@ -143,12 +163,12 @@ void GenerateNormals(const VEC_POINT3F &triNorms,
 					avgNorm.x += tri.x * weights[j];
 					avgNorm.y += tri.y * weights[j];
 					avgNorm.z += tri.z * weights[j];
-					fDiv += weights[j];
+					fWeiSum += weights[j];
 				}
 			}
-			avgNorm.x /= fDiv;
-			avgNorm.y /= fDiv;
-			avgNorm.z /= fDiv;
+			avgNorm.x /= fWeiSum;
+			avgNorm.y /= fWeiSum;
+			avgNorm.z /= fWeiSum;
 		}
 	}
 }

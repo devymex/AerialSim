@@ -3,9 +3,6 @@
 
 CKDTree::CKDTree(int nNbCnt)
 	: m_nNbCnt(nNbCnt)
-	, m_Query(1, 2, CV_32F)
-	, m_Indices(m_nNbCnt, 1, CV_32S)
-	, m_Dists(m_nNbCnt, 1, CV_32F)
 {
 }
 
@@ -28,15 +25,19 @@ void CKDTree::Build(const VEC_POINT3F points)
 void CKDTree::Destroy()
 {
 	m_kdTree.release();
-	m_Query.release();
-	m_Indices.release();
-	m_Dists.release();
 }
 
-int CKDTree::Neighbors(float x, float y)
+void CKDTree::InitSearch(CSearchResult &sr) const
 {
-	*(float*)(m_Query.data + 0) = x;
-	*(float*)(m_Query.data + 4) = y;
-	m_kdTree.knnSearch(m_Query, m_Indices, m_Dists, m_nNbCnt);
+	sr.m_Query = cv::Mat(1, 2, CV_32F);
+	sr.m_Indices = cv::Mat(m_nNbCnt, 2, CV_32S);
+	sr.m_Dists = cv::Mat(m_nNbCnt, 2, CV_32F);
+}
+
+int CKDTree::Search(float x, float y, CSearchResult &sr)
+{
+	*(float*)(sr.m_Query.data + 0) = x;
+	*(float*)(sr.m_Query.data + 4) = y;
+	m_kdTree.knnSearch(sr.m_Query, sr.m_Indices, sr.m_Dists, m_nNbCnt);
 	return m_nNbCnt;
 }

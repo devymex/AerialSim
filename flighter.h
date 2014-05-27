@@ -10,10 +10,11 @@ public:
 	~CFlighter();
 
 	BOOL Create();
+
 	void Destroy();
 
-	void SetTerrain( const VEC_POINT3F &vertBuf, const VEC_POINT3F &normBuf,
-					 const VEC_INT &idxBuf, const VEC_INT &ancBuf);
+	void SetTerrain(const VEC_POINT3F &vertBuf, const VEC_POINT3F &normBuf,
+					const VEC_INT &idxBuf, const VEC_INT &ancBuf);
 
 	void SetFlightSchema(const FLIGHTSCHEMA &fs);
 

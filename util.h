@@ -21,6 +21,8 @@ struct NOSKIPMAP
 
 float String2Float(const char *&pStr);
 
+std::string Int2Str(int n);
+
 std::string W2A(LPCWSTR pStrIn);
 
 std::wstring A2W(LPCSTR pStrIn);

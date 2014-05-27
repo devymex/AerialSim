@@ -11,7 +11,6 @@ struct DEMINFO
 
 struct FLIGHTSCHEMA
 {
-	int			nDir;
 	float		fBegX;
 	float		fBegY;
 	float		fEndX;

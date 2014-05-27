@@ -1,40 +1,22 @@
 #include "stdafx.h"
 #include "flighter.h"
+#include "util.h"
 
 CFlighter *g_pWnd = NULL;
 
-std::string Num2Str(int n)
-{
-	char szNum[20];
-
-#pragma warning (push)
-#pragma warning (disable: 4996)
-	itoa(n, szNum, 10);
-#pragma warning (pop)
-
-	std::string result(szNum);
-	for (; result.size() < 5; )
-	{
-		result.insert(result.begin(), '0');
-	}
-	return result;
-}
-
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-	if (g_pWnd != NULL)
+	if (g_pWnd != NULL && message == WM_CREATE && g_pWnd->m_hWnd == NULL)
 	{
-		if (message == WM_CREATE)
-		{
-			g_pWnd->m_hWnd = hWnd;
-			return g_pWnd->OnCreate();
-		}
+		g_pWnd->m_hWnd = hWnd;
+		return g_pWnd->OnCreate();
 	}
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
 CFlighter::CFlighter()
-	: m_hglrc(NULL)
+	: m_hWnd(NULL)
+	, m_hglrc(NULL)
 	, m_hdc(NULL)
 	, m_pVertBuf(NULL)
 	, m_pNormBuf(NULL)
@@ -73,7 +55,7 @@ BOOL CFlighter::Create()
 
 	m_hWnd = CreateWindow(
 		wcex.lpszClassName,
-		_T("Aerial Sim"),
+		wcex.lpszClassName,
 		0,
 		CW_USEDEFAULT, 0, CW_USEDEFAULT, 0,
 		NULL,
@@ -155,7 +137,7 @@ void CFlighter::Flight(const char *pOutPath)
 
 	int nCnt = SaveHomoAnchor(pOutPath, anchorMap);
 	std::cout << "Flight finished. Captured ";
-	std::cout << nCnt << " pictures." << std::endl;
+	std::cout << nImgId << " pictures." << std::endl;
 	std::cout << "Set up " << nCnt << " anchors and ";
 	std::cout << anchorMap.size() << " homonymies" << std::endl;
 }
@@ -298,7 +280,7 @@ void CFlighter::GenerateImage(cv::Mat &img)
 		GL_UNSIGNED_INT, m_pIdxBuf->data());
 
 	glReadPixels(0, 0, m_fs.imgSize.width, m_fs.imgSize.height,
-		GL_RGBA, GL_UNSIGNED_BYTE, img.data);
+		GL_BGRA_EXT, GL_UNSIGNED_BYTE, img.data);
 
 	cv::flip(img, img, 0);
 }
@@ -306,7 +288,7 @@ void CFlighter::GenerateImage(cv::Mat &img)
 void CFlighter::SaveImage(const cv::Mat &img, int nId, const char *pPath)
 {
 	std::string strFile = std::string(pPath);
-	strFile += Num2Str(nId) + std::string(".bmp");
+	strFile += Int2Str(nId) + std::string(".bmp");
 	cv::imwrite(strFile, img);
 }
 
@@ -325,7 +307,6 @@ int CFlighter::SaveHomoAnchor(const char *pOutPath,
 	for (MAP_ANCHOR_CITER i = anchorMap.begin(); i != anchorMap.end(); ++i)
 	{
 		const VEC_POINT3I &anchors = i->second;
-		int nCnt = anchors.size();
 		homFile.write((char*)&nCnt, sizeof(nCnt));
 		for (VEC_POINT3I_CITER j = anchors.cbegin(); j != anchors.cend(); ++j)
 		{

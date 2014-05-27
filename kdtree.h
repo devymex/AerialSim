@@ -1,16 +1,8 @@
 #include "mytypes.h"
 
-class CKDTree
+class CSearchResult
 {
 public:
-	CKDTree(int nNbCnt);
-
-	void Build(const VEC_POINT3F points);
-
-	void Destroy();
-
-	int Neighbors(float x, float y);
-
 	inline int Index(int nId)
 	{
 		return ((int*)m_Indices.data)[nId];
@@ -20,6 +12,23 @@ public:
 	{
 		return ((float*)m_Dists.data)[nId];
 	}
+	cv::Mat m_Query;
+	cv::Mat m_Indices;
+	cv::Mat m_Dists;
+};
+
+class CKDTree
+{
+public:
+	CKDTree(int nNbCnt);
+
+	void Build(const VEC_POINT3F points);
+
+	void Destroy();
+
+	void InitSearch(CSearchResult &sr) const;
+
+	int Search(float x, float y, CSearchResult &sr);
 
 private:
 	CKDTree& operator = (const CKDTree&)
@@ -28,8 +37,5 @@ private:
 
 	const int m_nNbCnt;
 	cv::Mat m_Points;
-	cv::Mat m_Query;
-	cv::Mat m_Indices;
-	cv::Mat m_Dists;
 	cv::flann::Index m_kdTree;
 };

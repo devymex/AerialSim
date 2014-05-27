@@ -6,6 +6,16 @@
 #include "params.h"
 #include "util.h"
 
+struct DEMTHREADPARAM
+{
+	int nBegRow;
+	int nEndRow;
+	const VEC_POINT3F *pPoints;
+	CKDTree *pKdTree;
+	const DEMINFO *pDemInfo;
+	VEC_POINT3F *pDem;
+};
+
 bool LoadXYZFile(const char *pFileName, std::vector<cv::Point3f> &points)
 {
 	std::cout << "Loading input file \"";
@@ -72,6 +82,32 @@ void AnalyzeData(const VEC_POINT3F &points, cv::Point3f &minPt,
 		<< avgPt.y << ", " << avgPt.z << ")." << std::endl;
 }
 
+DWORD CALLBACK DemThread(LPVOID lpParam)
+{
+	DEMTHREADPARAM &tp = *(DEMTHREADPARAM*)lpParam;
+	const DEMINFO &demInfo = *tp.pDemInfo;
+	CSearchResult sr;
+	tp.pKdTree->InitSearch(sr);
+	for (int r = tp.nBegRow; r < tp.nEndRow; ++r)
+	{
+		for (int c = 0; c < demInfo.nCols; ++c)
+		{
+			cv::Point3f &curPt = tp.pDem->at(r * demInfo.nCols + c);
+			curPt.x = c * demInfo.fStep + demInfo.fBegX;
+			curPt.y = r * demInfo.fStep + demInfo.fBegY;
+			int nNbCnt = tp.pKdTree->Search(curPt.x, curPt.y, sr);
+			float fSumDist = 0.0f;
+			for (int j = 0; j < nNbCnt; ++j)
+			{
+				curPt.z += tp.pPoints->at(sr.Index(j)).z / sr.Distance(j);
+				fSumDist += (1.0f / sr.Distance(j));
+			}
+			curPt.z /= fSumDist;
+		}
+	}
+	return 0;
+}
+
 void GenerateDEM(const VEC_POINT3F &points, CKDTree &kdTree,
 				 const DEMINFO &demInfo, VEC_POINT3F &dem)
 {
@@ -79,23 +115,36 @@ void GenerateDEM(const VEC_POINT3F &points, CKDTree &kdTree,
 	std::cout << demInfo.nRows << " x " << demInfo.nCols << ")..." << std::endl;
 	dem.resize(demInfo.nRows * demInfo.nCols);
 	memset(dem.data(), 0, dem.size() * sizeof(dem[0]));
-	for (int r = 0; r < demInfo.nRows; ++r)
+
+	SYSTEM_INFO sysInfo;
+	GetSystemInfo(&sysInfo);
+
+	int nCpuCnt = sysInfo.dwNumberOfProcessors;
+	std::vector<HANDLE> threads(nCpuCnt);
+	std::vector<DEMTHREADPARAM> params(nCpuCnt);
+
+	int nRowPerThread = int(std::ceil((float)demInfo.nRows / (float)nCpuCnt));
+	for (int i = 0; i < nCpuCnt; ++i)
 	{
-		for (int c = 0; c < demInfo.nCols; ++c)
+		DEMTHREADPARAM &tp = params[i];
+		tp.nBegRow = i * nRowPerThread;
+		tp.nEndRow = (i + 1) * nRowPerThread;
+		if (tp.nEndRow > demInfo.nRows)
 		{
-			cv::Point3f &curPt = dem.at(r * demInfo.nCols + c);
-			curPt.x = c * demInfo.fStep + demInfo.fBegX;
-			curPt.y = r * demInfo.fStep + demInfo.fBegY;
-			int nNbCnt = kdTree.Neighbors(curPt.x, curPt.y);
-			float fSumDist = 0.0f;
-			for (int j = 0; j < nNbCnt; ++j)
-			{
-				curPt.z += points.at(kdTree.Index(j)).z / kdTree.Distance(j);
-				fSumDist += (1.0f / kdTree.Distance(j));
-			}
-			curPt.z /= fSumDist;
+			tp.nEndRow = demInfo.nRows;
 		}
+		tp.pDem = &dem;
+		tp.pDemInfo = &demInfo;
+		tp.pKdTree = &kdTree;
+		tp.pPoints = &points;
+		threads[i] = CreateThread(NULL, 0, DemThread, &tp, 0, NULL);
 	}
+	WaitForMultipleObjects(nCpuCnt, threads.data(), TRUE, INFINITE);
+	for (int i = 0; i < nCpuCnt; ++i)
+	{
+		CloseHandle(threads[i]);
+	}
+
 	std::cout << "DEM generated, with " << demInfo.nRows * demInfo.nCols;
 	std::cout << " elements" << std::endl;
 }
@@ -236,6 +285,5 @@ int main(int nArgCnt, const char **ppArgs)
 	std::cout << "Used " << dSec << " sec." << std::endl << std::endl;
 
 
-	system("pause");
 	return 0;
 }
