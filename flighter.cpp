@@ -92,6 +92,7 @@ void CFlighter::Destroy()
 	m_pIdxBuf = NULL;
 	m_pAncBuf = NULL;
 	memset(&m_fs, 0, sizeof(m_fs));
+	m_strOutPath.clear();
 }
 
 void CFlighter::SetTerrain(const VEC_POINT3F &vertBuf,
@@ -110,13 +111,15 @@ void CFlighter::SetTerrain(const VEC_POINT3F &vertBuf,
 	glNormalPointer(GL_FLOAT, 0, m_pNormBuf->data());
 }
 
-void CFlighter::SetFlightSchema(const FLIGHTSCHEMA &fs)
+void CFlighter::SetFlightSchema(const FLIGHTSCHEMA &fs,
+								const char *pOutPath)
 {
 	m_fs = fs;
 	Resize(m_fs.imgSize.width, m_fs.imgSize.height, m_fs.fFOV);
+	m_strOutPath = std::string(pOutPath);
 }
 
-void CFlighter::Flight(const char *pOutPath)
+void CFlighter::Flight()
 {
 	std::cout << "Begin flight..." << std::endl;
 
@@ -130,12 +133,12 @@ void CFlighter::Flight(const char *pOutPath)
 		{
 			SetModalView(r, c);
 			GenerateImage(image);
-			SaveImage(image, nImgId, pOutPath);
+			SaveImage(image, nImgId);
 			SetupAnchors(anchorMap, nImgId++);
 		}
 	}
 
-	int nCnt = SaveHomoAnchor(pOutPath, anchorMap);
+	int nCnt = SaveHomoAnchor(anchorMap);
 	std::cout << "Flight finished. Captured ";
 	std::cout << nImgId << " pictures." << std::endl;
 	std::cout << "Set up " << nCnt << " anchors and ";
@@ -285,29 +288,29 @@ void CFlighter::GenerateImage(cv::Mat &img)
 	cv::flip(img, img, 0);
 }
 
-void CFlighter::SaveImage(const cv::Mat &img, int nId, const char *pPath)
+void CFlighter::SaveImage(const cv::Mat &img, int nId)
 {
-	std::string strFile = std::string(pPath);
+	std::string strFile = m_strOutPath;
 	strFile += Int2Str(nId) + std::string(".bmp");
 	cv::imwrite(strFile, img);
 }
 
-int CFlighter::SaveHomoAnchor(const char *pOutPath,
-							   const MAP_ANCHOR &anchorMap)
+int CFlighter::SaveHomoAnchor(const MAP_ANCHOR &anchorMap)
 {
 	std::string strFile;
 
-	strFile = std::string(pOutPath) + std::string("anchors");
+	strFile = m_strOutPath + std::string("anchors");
 	std::ofstream ancFile(strFile, std::ios::binary);
 
-	strFile = std::string(pOutPath) + std::string("homos");
+	strFile = m_strOutPath + std::string("homos");
 	std::ofstream homFile(strFile, std::ios::binary);
 
 	int nCnt = 0;
 	for (MAP_ANCHOR_CITER i = anchorMap.begin(); i != anchorMap.end(); ++i)
 	{
 		const VEC_POINT3I &anchors = i->second;
-		homFile.write((char*)&nCnt, sizeof(nCnt));
+		int nSize = (int)anchors.size();
+		homFile.write((char*)&nSize, sizeof(nSize));
 		for (VEC_POINT3I_CITER j = anchors.cbegin(); j != anchors.cend(); ++j)
 		{
 			ancFile.write((char*)&*j, sizeof(*j));

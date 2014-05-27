@@ -16,11 +16,12 @@ public:
 	void SetTerrain(const VEC_POINT3F &vertBuf, const VEC_POINT3F &normBuf,
 					const VEC_INT &idxBuf, const VEC_INT &ancBuf);
 
-	void SetFlightSchema(const FLIGHTSCHEMA &fs);
+	void SetFlightSchema(const FLIGHTSCHEMA &fs,
+						 const char *pOutPath);
 
 	void SetLightPos(const cv::Point3f &pos);
 
-	void Flight(const char *pOutPath);
+	void Flight();
 
 	LRESULT OnCreate();
 
@@ -34,9 +35,9 @@ private:
 
 	void GenerateImage(cv::Mat &img);
 	
-	void SaveImage(const cv::Mat &img, int nId, const char *pPath);
+	void SaveImage(const cv::Mat &img, int nId);
 
-	int SaveHomoAnchor(const char *pOutPath, const MAP_ANCHOR &anchorMap);
+	int SaveHomoAnchor(const MAP_ANCHOR &anchorMap);
 
 
 	double				m_prjMat[16];
@@ -51,5 +52,6 @@ private:
 	const VEC_INT		*m_pAncBuf;
 
 	FLIGHTSCHEMA		m_fs;
+	std::string			m_strOutPath;
 
 };

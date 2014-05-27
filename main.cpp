@@ -174,10 +174,10 @@ int main(int nArgCnt, const char **ppArgs)
 	cv::Point3f		lightPos;
 	FLIGHTSCHEMA	fs;
 	DEMINFO			demInfo;
-	CTimer			timer;
-	double			dSec;
 	CParams			params;
 	CFlighter		mainWnd;
+	CTimer			timer;
+	double			dSec;
 
 
 	//Loading parameters
@@ -277,9 +277,9 @@ int main(int nArgCnt, const char **ppArgs)
 	timer.Reset();
 	mainWnd.Create();
 	mainWnd.SetTerrain(dem, normals, indices, anchorIdx);
-	mainWnd.SetFlightSchema(fs);
+	mainWnd.SetFlightSchema(fs, params.strPath.c_str());
 	mainWnd.SetLightPos(lightPos);
-	mainWnd.Flight(params.strPath.c_str());
+	mainWnd.Flight();
 	mainWnd.Destroy();
 	dSec = timer.Cur();
 	std::cout << "Used " << dSec << " sec." << std::endl << std::endl;
