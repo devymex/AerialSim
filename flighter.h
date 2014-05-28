@@ -33,9 +33,9 @@ private:
 
 	void SetModalView(int r, int c);
 
-	void GenerateImage(cv::Mat &img);
+	void GenerateImage();
 	
-	void SaveImage(const cv::Mat &img, int nId);
+	bool SaveImage();
 
 	int SaveHomoAnchor(const MAP_ANCHOR &anchorMap);
 
@@ -43,15 +43,18 @@ private:
 	double				m_prjMat[16];
 	double				m_mvMat[16];
 	int					m_vpParams[4];
-
+	int					m_nImgCnt;
 	HDC					m_hdc;
 	HGLRC				m_hglrc;
+	HANDLE				m_hDrawMutex;
+	HANDLE				m_hSaveMutex;
 	const VEC_POINT3F	*m_pVertBuf;
 	const VEC_POINT3F	*m_pNormBuf;
 	const VEC_INT		*m_pIdxBuf;
 	const VEC_INT		*m_pAncBuf;
-
 	FLIGHTSCHEMA		m_fs;
 	std::string			m_strOutPath;
+	cv::Mat				m_img;
 
+	friend DWORD CALLBACK SaveImageThread(LPVOID lpParam);
 };

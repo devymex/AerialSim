@@ -46,15 +46,15 @@ bool LoadXYZFile(const char *pFileName, std::vector<cv::Point3f> &points)
 	return true;
 }
 
-void AnalyzeData(const VEC_POINT3F &points, cv::Point3f &minPt,
-				 cv::Point3f &maxPt, cv::Point3f &avgPt)
+void AnalyzeData(const VEC_POINT3F &points,
+				 cv::Point3f &minPt,
+				 cv::Point3f &maxPt)
 {
 	std::cout << "Analyzing data..." << std::endl;
 	if (!points.empty())
 	{
 		minPt = points[0];
 		maxPt = points[0];
-		cv::Point3d avg(0.0, 0.0, 0.0);
 		for (VEC_POINT3F_CITER i = points.begin() + 1; i != points.end(); ++i)
 		{
 			if		(i->x < minPt.x)	minPt.x = i->x;
@@ -66,20 +66,12 @@ void AnalyzeData(const VEC_POINT3F &points, cv::Point3f &minPt,
 			if		(i->z < minPt.z)	minPt.z = i->z;
 			else if (i->z > maxPt.z)	maxPt.z = i->z;
 
-			avg.x += i->x;
-			avg.y += i->y;
-			avg.z += i->z;
 		}
-		avgPt.x = float(avg.x / points.size());
-		avgPt.y = float(avg.y / points.size());
-		avgPt.z = float(avg.z / points.size());
 	}
 	std::cout << "Minimum coordinates: (" << minPt.x << ", "
 		<< minPt.y << ", " << minPt.z << ");" << std::endl;
 	std::cout << "Maximum coordinates: (" << maxPt.x << ", "
 		<< maxPt.y << ", " << maxPt.z << ");" << std::endl;
-	std::cout << "Average coordinates: (" << avgPt.x << ", "
-		<< avgPt.y << ", " << avgPt.z << ")." << std::endl;
 }
 
 DWORD CALLBACK DemThread(LPVOID lpParam)
@@ -170,7 +162,8 @@ int main(int nArgCnt, const char **ppArgs)
 	VEC_POINT3F		normals;
 	VEC_INT			indices;
 	VEC_INT			anchorIdx;
-	cv::Point3f		minPt, maxPt, avgPt;
+	cv::Point3f		minPt;
+	cv::Point3f		maxPt;
 	cv::Point3f		lightPos;
 	FLIGHTSCHEMA	fs;
 	DEMINFO			demInfo;
@@ -183,7 +176,7 @@ int main(int nArgCnt, const char **ppArgs)
 	//Loading parameters
 	if (nArgCnt < 2)
 	{
-		std::cout << "At least 1 parameters." << std::endl;
+		std::cout << "Point cloud file not specified!" << std::endl;
 		return -1;
 	}
 	const char *pInputFile = ppArgs[1];
@@ -217,7 +210,7 @@ int main(int nArgCnt, const char **ppArgs)
 
 	//Analyzing data
 	timer.Reset();
-	AnalyzeData(points, minPt, maxPt, avgPt);
+	AnalyzeData(points, minPt, maxPt);
 	CalcLightPos(minPt, maxPt, lightPos);
 	fs.fBase	= minPt.z;
 	fs.fBegX	= minPt.x;

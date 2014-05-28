@@ -3,6 +3,7 @@
 #include "util.h"
 
 CFlighter *g_pWnd = NULL;
+LPCTSTR g_pClassName = _T("AERIALSIM");
 
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
@@ -22,9 +23,12 @@ CFlighter::CFlighter()
 	, m_pNormBuf(NULL)
 	, m_pIdxBuf(NULL)
 	, m_pAncBuf(NULL)
+	, m_nImgCnt(0)
 {
 	g_pWnd = this;
 	memset(&m_fs, 0, sizeof(m_fs));
+	m_hDrawMutex = CreateSemaphore(NULL, 0, 1, NULL);
+	m_hSaveMutex = CreateSemaphore(NULL, 1, 1, NULL);
 }
 
 CFlighter::~CFlighter()
@@ -46,7 +50,7 @@ BOOL CFlighter::Create()
 	wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
 	wcex.lpszMenuName = NULL;
-	wcex.lpszClassName = _T("AERIALSIM");
+	wcex.lpszClassName = g_pClassName;
 	wcex.hIconSm = NULL;
 	if (!RegisterClassEx(&wcex))
 	{
@@ -87,6 +91,10 @@ void CFlighter::Destroy()
 		DestroyWindow(m_hWnd);
 		m_hWnd = NULL;
 	}
+
+	HINSTANCE hInst = GetModuleHandle(NULL);
+	UnregisterClass(g_pClassName, hInst);
+
 	m_pVertBuf = NULL;
 	m_pNormBuf = NULL;
 	m_pIdxBuf = NULL;
@@ -119,28 +127,75 @@ void CFlighter::SetFlightSchema(const FLIGHTSCHEMA &fs,
 	m_strOutPath = std::string(pOutPath);
 }
 
+void CFlighter::GenerateImage()
+{
+	cv::Size imgSize(m_fs.imgSize.width, m_fs.imgSize.height);
+	if (m_img.size() != imgSize || m_img.type() != CV_8UC4)
+	{
+		m_img = cv::Mat::zeros(imgSize, CV_8UC4);
+	}
+
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	glDrawElements(GL_TRIANGLES, m_pIdxBuf->size(),
+		GL_UNSIGNED_INT, m_pIdxBuf->data());
+
+	WaitForSingleObject(m_hSaveMutex, INFINITE);
+	glReadPixels(0, 0, m_fs.imgSize.width, m_fs.imgSize.height,
+		GL_BGRA_EXT, GL_UNSIGNED_BYTE, m_img.data);
+
+	cv::flip(m_img, m_img, 0);
+	ReleaseSemaphore(m_hDrawMutex, 1, NULL);
+}
+
+DWORD CALLBACK SaveImageThread(LPVOID lpParam)
+{
+	for (CFlighter *pFlt = (CFlighter*)lpParam; pFlt->SaveImage(); );
+	return 0;
+}
+
+bool CFlighter::SaveImage()
+{
+	//Waiting for draw completed
+	WaitForSingleObject(m_hDrawMutex, INFINITE);
+	if (m_img.empty())
+	{
+		return false;
+	}
+	std::string strFile = m_strOutPath;
+	strFile += Int2Str(m_nImgCnt) + std::string(".bmp");
+	cv::imwrite(strFile, m_img);
+	ReleaseSemaphore(m_hSaveMutex, 1, NULL);
+	return true;
+}
+
 void CFlighter::Flight()
 {
 	std::cout << "Begin flight..." << std::endl;
 
 	cv::Mat image;
 	MAP_ANCHOR anchorMap;
-	int nImgId = 0;
+	m_nImgCnt = 0;
+
+	HANDLE hThread = CreateThread(NULL, 0, SaveImageThread, this, 0, NULL);
 
 	for (int c = 0; c < m_fs.imgCnt.width; ++c)
 	{
 		for (int r = 0; r < m_fs.imgCnt.height; ++r)
 		{
 			SetModalView(r, c);
-			GenerateImage(image);
-			SaveImage(image, nImgId);
-			SetupAnchors(anchorMap, nImgId++);
+			GenerateImage();
+			SetupAnchors(anchorMap, m_nImgCnt++);
 		}
 	}
+	m_img.release();
+	ReleaseSemaphore(m_hDrawMutex, 1, NULL);
+	WaitForSingleObject(hThread, INFINITE);
+	CloseHandle(hThread);
 
 	int nCnt = SaveHomoAnchor(anchorMap);
 	std::cout << "Flight finished. Captured ";
-	std::cout << nImgId << " pictures." << std::endl;
+	std::cout << m_nImgCnt << " pictures." << std::endl;
 	std::cout << "Set up " << nCnt << " anchors and ";
 	std::cout << anchorMap.size() << " homonymies" << std::endl;
 }
@@ -196,7 +251,7 @@ LRESULT CFlighter::OnCreate()
 	glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
 	glShadeModel(GL_SMOOTH);
 	glClearColor(0.5f, 0.5f, 0.0f, 0.0f);
-
+	glReadBuffer(GL_BACK);
 	return 0;
 }
 
@@ -267,32 +322,6 @@ void CFlighter::Resize(int nWidth, int nHeight, float fFOV)
 
 	glGetDoublev(GL_PROJECTION_MATRIX, m_prjMat);
 	glGetIntegerv(GL_VIEWPORT, m_vpParams);
-}
-
-void CFlighter::GenerateImage(cv::Mat &img)
-{
-	cv::Size imgSize(m_fs.imgSize.width, m_fs.imgSize.height);
-	if (img.size() != imgSize || img.type() != CV_8UC4)
-	{
-		img = cv::Mat::zeros(imgSize, CV_8UC4);
-	}
-
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-	glDrawElements(GL_TRIANGLES, m_pIdxBuf->size(),
-		GL_UNSIGNED_INT, m_pIdxBuf->data());
-
-	glReadPixels(0, 0, m_fs.imgSize.width, m_fs.imgSize.height,
-		GL_BGRA_EXT, GL_UNSIGNED_BYTE, img.data);
-
-	cv::flip(img, img, 0);
-}
-
-void CFlighter::SaveImage(const cv::Mat &img, int nId)
-{
-	std::string strFile = m_strOutPath;
-	strFile += Int2Str(nId) + std::string(".bmp");
-	cv::imwrite(strFile, img);
 }
 
 int CFlighter::SaveHomoAnchor(const MAP_ANCHOR &anchorMap)
