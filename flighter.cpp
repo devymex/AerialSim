@@ -23,12 +23,9 @@ CFlighter::CFlighter()
 	, m_pNormBuf(NULL)
 	, m_pIdxBuf(NULL)
 	, m_pAncBuf(NULL)
-	, m_nImgCnt(0)
 {
 	g_pWnd = this;
 	memset(&m_fs, 0, sizeof(m_fs));
-	m_hDrawMutex = CreateSemaphore(NULL, 0, 1, NULL);
-	m_hSaveMutex = CreateSemaphore(NULL, 1, 1, NULL);
 }
 
 CFlighter::~CFlighter()
@@ -101,6 +98,7 @@ void CFlighter::Destroy()
 	m_pAncBuf = NULL;
 	memset(&m_fs, 0, sizeof(m_fs));
 	m_strOutPath.clear();
+	m_ancMap.clear();
 }
 
 void CFlighter::SetTerrain(const VEC_POINT3F &vertBuf,
@@ -127,7 +125,7 @@ void CFlighter::SetFlightSchema(const FLIGHTSCHEMA &fs,
 	m_strOutPath = std::string(pOutPath);
 }
 
-void CFlighter::GenerateImage()
+void CFlighter::CaptureImage()
 {
 	cv::Size imgSize(m_fs.imgSize.width, m_fs.imgSize.height);
 	if (m_img.size() != imgSize || m_img.type() != CV_8UC4)
@@ -139,33 +137,22 @@ void CFlighter::GenerateImage()
 
 	glDrawElements(GL_TRIANGLES, m_pIdxBuf->size(),
 		GL_UNSIGNED_INT, m_pIdxBuf->data());
-
-	WaitForSingleObject(m_hSaveMutex, INFINITE);
 	glReadPixels(0, 0, m_fs.imgSize.width, m_fs.imgSize.height,
 		GL_BGRA_EXT, GL_UNSIGNED_BYTE, m_img.data);
 
 	cv::flip(m_img, m_img, 0);
-	ReleaseSemaphore(m_hDrawMutex, 1, NULL);
 }
 
-DWORD CALLBACK SaveImageThread(LPVOID lpParam)
+bool CFlighter::SaveImage(int nImgId)
 {
-	for (CFlighter *pFlt = (CFlighter*)lpParam; pFlt->SaveImage(); );
-	return 0;
-}
-
-bool CFlighter::SaveImage()
-{
-	//Waiting for draw completed
-	WaitForSingleObject(m_hDrawMutex, INFINITE);
 	if (m_img.empty())
 	{
 		return false;
 	}
 	std::string strFile = m_strOutPath;
-	strFile += Int2Str(m_nImgCnt) + std::string(".bmp");
+	strFile += Int2Str(nImgId) + std::string(".bmp");
 	cv::imwrite(strFile, m_img);
-	ReleaseSemaphore(m_hSaveMutex, 1, NULL);
+
 	return true;
 }
 
@@ -174,30 +161,28 @@ void CFlighter::Flight()
 	std::cout << "Begin flight..." << std::endl;
 
 	cv::Mat image;
-	MAP_ANCHOR anchorMap;
-	m_nImgCnt = 0;
-
-	HANDLE hThread = CreateThread(NULL, 0, SaveImageThread, this, 0, NULL);
+	int nImgId = 0;
 
 	for (int c = 0; c < m_fs.imgCnt.width; ++c)
 	{
 		for (int r = 0; r < m_fs.imgCnt.height; ++r)
 		{
 			SetModalView(r, c);
-			GenerateImage();
-			SetupAnchors(anchorMap, m_nImgCnt++);
+			CaptureImage();
+			SetupAnchors(nImgId);
+			SaveImage(nImgId);
+			++nImgId;
 		}
 	}
 	m_img.release();
-	ReleaseSemaphore(m_hDrawMutex, 1, NULL);
-	WaitForSingleObject(hThread, INFINITE);
-	CloseHandle(hThread);
 
-	int nCnt = SaveHomoAnchor(anchorMap);
+	int nCnt = SaveHomoAnchor();
+
 	std::cout << "Flight finished. Captured ";
-	std::cout << m_nImgCnt << " pictures." << std::endl;
+	std::cout << nImgId << " pictures." << std::endl;
 	std::cout << "Set up " << nCnt << " anchors and ";
-	std::cout << anchorMap.size() << " homonymies" << std::endl;
+	std::cout << m_ancMap.size() << " homonymies" << std::endl;
+	m_ancMap.clear();
 }
 
 void CFlighter::SetLightPos(const cv::Point3f &pos)
@@ -238,25 +223,34 @@ LRESULT CFlighter::OnCreate()
 		return -1;
 	}
 
-	float LightColor[] = {0.3f, 0.3f, 0.3f, 1.0f};
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_BACK);
+
 	glEnable(GL_DEPTH_TEST);
 	glDepthFunc(GL_LEQUAL);
+
 	glEnable(GL_LIGHTING);
+	glEnable(GL_LIGHT0);
+	float LightColor[] = {0.3f, 0.3f, 0.3f, 1.0f};
 	glLightfv(GL_LIGHT0, GL_AMBIENT, LightColor);
 	glLightfv(GL_LIGHT0, GL_DIFFUSE, LightColor);
-	glEnable(GL_LIGHT0);
+
 	glEnable(GL_COLOR_MATERIAL);
 	glColorMaterial(GL_FRONT, GL_AMBIENT_AND_DIFFUSE);
+
 	glShadeModel(GL_SMOOTH);
+
 	glClearColor(0.5f, 0.5f, 0.0f, 0.0f);
+
 	glReadBuffer(GL_BACK);
+
 	return 0;
 }
 
-void CFlighter::SetupAnchors(MAP_ANCHOR &anchorMap, int nImgId)
+void CFlighter::SetupAnchors(int nImgId)
 {
+	ANCHOR anc;
+	anc.nImgId = nImgId;
 	for (VEC_INT_CITER i = m_pAncBuf->cbegin();
 		i != m_pAncBuf->cend(); ++i)
 	{
@@ -267,8 +261,9 @@ void CFlighter::SetupAnchors(MAP_ANCHOR &anchorMap, int nImgId)
 		if (x >= 0 && x <= m_fs.imgSize.width &&
 			y >= 0 && y <= m_fs.imgSize.height)
 		{
-			cv::Point3i imgPt(nImgId, int(x + 0.5f), int(y + 0.5f));
-			anchorMap[*i].push_back(imgPt);
+			anc.coord.x = float(x);
+			anc.coord.y = float(m_fs.imgSize.height - y);
+			m_ancMap[*i].push_back(anc);
 		}
 	}
 }
@@ -324,7 +319,7 @@ void CFlighter::Resize(int nWidth, int nHeight, float fFOV)
 	glGetIntegerv(GL_VIEWPORT, m_vpParams);
 }
 
-int CFlighter::SaveHomoAnchor(const MAP_ANCHOR &anchorMap)
+int CFlighter::SaveHomoAnchor()
 {
 	std::string strFile;
 
@@ -335,12 +330,12 @@ int CFlighter::SaveHomoAnchor(const MAP_ANCHOR &anchorMap)
 	std::ofstream homFile(strFile, std::ios::binary);
 
 	int nCnt = 0;
-	for (MAP_ANCHOR_CITER i = anchorMap.begin(); i != anchorMap.end(); ++i)
+	for (MAP_IMGANC_ITER i = m_ancMap.begin(); i != m_ancMap.end(); ++i)
 	{
-		const VEC_POINT3I &anchors = i->second;
+		const VEC_ANCHOR &anchors = i->second;
 		int nSize = (int)anchors.size();
 		homFile.write((char*)&nSize, sizeof(nSize));
-		for (VEC_POINT3I_CITER j = anchors.cbegin(); j != anchors.cend(); ++j)
+		for (VEC_ANCHOR_CITER j = anchors.cbegin(); j != anchors.cend(); ++j)
 		{
 			ancFile.write((char*)&*j, sizeof(*j));
 			homFile.write((char*)&nCnt, sizeof(nCnt));

@@ -57,14 +57,14 @@ void AnalyzeData(const VEC_POINT3F &points,
 		maxPt = points[0];
 		for (VEC_POINT3F_CITER i = points.begin() + 1; i != points.end(); ++i)
 		{
-			if		(i->x < minPt.x)	minPt.x = i->x;
-			else if (i->x > maxPt.x)	maxPt.x = i->x;
+			if (i->x < minPt.x) minPt.x = i->x;
+			if (i->x > maxPt.x) maxPt.x = i->x;
 
-			if		(i->y < minPt.y)	minPt.y = i->y;
-			else if (i->y > maxPt.y)	maxPt.y = i->y;
+			if (i->y < minPt.y) minPt.y = i->y;
+			if (i->y > maxPt.y) maxPt.y = i->y;
 
-			if		(i->z < minPt.z)	minPt.z = i->z;
-			else if (i->z > maxPt.z)	maxPt.z = i->z;
+			if (i->z < minPt.z) minPt.z = i->z;
+			if (i->z > maxPt.z) maxPt.z = i->z;
 
 		}
 	}

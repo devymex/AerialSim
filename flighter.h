@@ -29,25 +29,22 @@ private:
 
 	void Resize(int nWidth, int nHeight, float fFOV);
 
-	void SetupAnchors(MAP_ANCHOR &anchorMap, int nImgId);
+	void SetupAnchors(int nImgId);
 
 	void SetModalView(int r, int c);
 
-	void GenerateImage();
+	void CaptureImage();
 	
-	bool SaveImage();
+	bool SaveImage(int nImgId);
 
-	int SaveHomoAnchor(const MAP_ANCHOR &anchorMap);
+	int SaveHomoAnchor();
 
 
 	double				m_prjMat[16];
 	double				m_mvMat[16];
 	int					m_vpParams[4];
-	int					m_nImgCnt;
 	HDC					m_hdc;
 	HGLRC				m_hglrc;
-	HANDLE				m_hDrawMutex;
-	HANDLE				m_hSaveMutex;
 	const VEC_POINT3F	*m_pVertBuf;
 	const VEC_POINT3F	*m_pNormBuf;
 	const VEC_INT		*m_pIdxBuf;
@@ -55,6 +52,7 @@ private:
 	FLIGHTSCHEMA		m_fs;
 	std::string			m_strOutPath;
 	cv::Mat				m_img;
+	MAP_IMGANC			m_ancMap;
 
 	friend DWORD CALLBACK SaveImageThread(LPVOID lpParam);
 };
